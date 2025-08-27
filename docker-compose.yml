@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Frontend Service (Vite + React)
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_GATEWAY_URL=http://gateway:8080
+
+  # API Gateway Service (Go + Gin)
+  gateway:
+    build:
+      context: ./gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./gateway:/app
+      - ./data:/data # Persist SQLite DB
+    environment:
+      - CV_SERVICE_URL=http://cv-service:8081
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+    depends_on:
+      - otel-collector
+
+  # Computer Vision Service (Go + Gin)
+  cv-service:
+    build:
+      context: ./cv-service
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./cv-service:/app
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+    depends_on:
+      - otel-collector
+
+  # --- Observability Stack ---
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.83.0
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./observability/otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      - "13133:13133" # health_check extension
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  # Grafana
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana
