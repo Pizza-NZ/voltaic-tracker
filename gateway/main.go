@@ -11,6 +11,7 @@ import (
 	"os"
 	"pizza-nz/gateway/internal/database"
 	"pizza-nz/gateway/internal/tracing"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -21,6 +22,11 @@ import (
 
 type CVServiceResponse struct {
 	Scores []database.Score `json:"scores"`
+}
+
+type UpdateScorePayload struct {
+	Scenario string `json:"scenario"`
+	Score    int    `json:"score"`
 }
 
 func main() {
@@ -57,6 +63,7 @@ func main() {
 
 	router.POST("/upload", handleUpload(db))
 	router.GET("/scores", handleGetScores(db))
+	router.PUT("/scores/:id", handleUpdateScore(db))
 
 	router.Run(":8080")
 }
@@ -122,5 +129,35 @@ func handleGetScores(db *database.Queries) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"scores": scores})
+	}
+}
+
+func handleUpdateScore(db *database.Queries) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tracer := otel.Tracer("gateway-handler")
+		ctx, span := tracer.Start(c.Request.Context(), "handleUpdateScore")
+		defer span.End()
+
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid score ID"})
+			return
+		}
+
+		var payload UpdateScorePayload
+		if err := c.ShouldBindJSON(&payload); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		err = db.UpdateScore(ctx, id, payload.Scenario, payload.Score)
+		if err != nil {
+			fmt.Printf("Error updating score ID %d: %v\n", id, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update score"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Score updated successfully"})
 	}
 }

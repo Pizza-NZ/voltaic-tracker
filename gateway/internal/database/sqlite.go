@@ -20,6 +20,7 @@ type ScoresDatabase interface {
 	Close() error
 	CreateScore(ctx context.Context, scenario string, score int) error
 	GetAllScores(ctx context.Context) ([]Score, error)
+	UpdateScore(ctx context.Context, id int, scenario string, score int) error
 }
 
 type Queries struct {
@@ -88,4 +89,34 @@ func (q *Queries) GetAllScores(ctx context.Context) ([]Score, error) {
 		scores = append(scores, s)
 	}
 	return scores, nil
+}
+
+func (q *Queries) UpdateScore(ctx context.Context, id int, scenario string, score int) error {
+	tracer := otel.Tracer("database")
+	_, span := tracer.Start(ctx, "UpdateScore")
+	defer span.End()
+
+	stmt, err := q.db.Prepare("UPDATE scores SET scenario = ?, score = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(scenario, score, id)
+	return err
+}
+
+func (q *Queries) DeleteScore(ctx context.Context, id int) error {
+	tracer := otel.Tracer("database")
+	_, span := tracer.Start(ctx, "DeleteScore")
+	defer span.End()
+
+	stmt, err := q.db.Prepare("DELETE FROM scores WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	return err
 }

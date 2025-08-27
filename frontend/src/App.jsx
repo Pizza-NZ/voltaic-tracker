@@ -7,6 +7,10 @@ export default function App() {
   const [status, setStatus] = useState('Ready');
   const [error, setError] = useState('');
 
+  const [editingScoreId, setEditingScoreId] = useState(null);
+  const [editFormData, setEditFormData] = useState({ scenario: '', score: '' });
+
+  // Use config settings: just being lazy
   const gatewayUrl = 'http://localhost:8080';
 
   const fetchScores = async () => {
@@ -56,6 +60,38 @@ export default function App() {
     }
   };
 
+  const handleEditClick = (event, score) => {
+    event.preventDefault();
+    setEditingScoreId(score.id);
+    setEditFormData({ scenario: score.scenario, score: score.score });
+  };
+
+  const handleCancelClick = () => {
+    setEditingScoreId(null);
+  };
+
+  const handleEditFormChange = (event) => {
+    const { name, value } = event.target;
+    setEditFormData({ ...editFormData, [name]: value });
+  };
+
+  const handleUpdateSubmit = async (event, scoreId) => {
+    event.preventDefault();
+    setStatus('Updating score...');
+    try {
+      await axios.put(`${gatewayUrl}/scores/${scoreId}`, {
+        scenario: editFormData.scenario,
+        score: parseInt(editFormData.score, 10),
+      });
+      setEditingScoreId(null);
+      await fetchScores();
+      setStatus('Ready');
+    } catch (err) {
+      setError('Failed to update score.');
+      console.error(err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans p-8">
       <div className="container mx-auto max-w-4xl">
@@ -91,39 +127,92 @@ export default function App() {
           <div className="p-6">
             <h2 className="text-2xl font-semibold text-white">Score History</h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-300">
-              <thead className="text-xs text-cyan-300 uppercase bg-gray-700">
-                <tr>
-                  <th scope="col" className="px-6 py-3">
-                    Scenario
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Score
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Processed At
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {scores.map((score) => (
-                  <tr
-                    key={score.id}
-                    className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600"
-                  >
-                    <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
-                      {score.scenario}
-                    </td>
-                    <td className="px-6 py-4">{score.score}</td>
-                    <td className="px-6 py-4">
-                      {new Date(score.processed_at).toLocaleString()}
-                    </td>
+          <form onSubmit={(e) => e.preventDefault()}>
+            {' '}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-gray-300">
+                <thead className="text-xs text-cyan-300 uppercase bg-gray-700">
+                  <tr>
+                    <th scope="col" className="px-6 py-3">
+                      Scenario
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Score
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Processed At
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {scores.map((score) => (
+                    <Fragment key={score.id}>
+                      {editingScoreId === score.id ? (
+                        <tr className="bg-gray-700 border-b border-gray-600">
+                          <td className="px-6 py-4">
+                            <input
+                              type="text"
+                              name="scenario"
+                              value={editFormData.scenario}
+                              onChange={handleEditFormChange}
+                              className="bg-gray-600 rounded p-1 w-full"
+                            />
+                          </td>
+                          <td className="px-6 py-4">
+                            <input
+                              type="number"
+                              name="score"
+                              value={editFormData.score}
+                              onChange={handleEditFormChange}
+                              className="bg-gray-600 rounded p-1 w-24"
+                            />
+                          </td>
+                          <td className="px-6 py-4">
+                            {new Date(score.processed_at).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 flex space-x-4">
+                            <button
+                              onClick={(e) => handleUpdateSubmit(e, score.id)}
+                              className="font-medium text-green-500 hover:underline"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={handleCancelClick}
+                              className="font-medium text-gray-400 hover:underline"
+                            >
+                              Cancel
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
+                          <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
+                            {score.scenario}
+                          </td>
+                          <td className="px-6 py-4">{score.score}</td>
+                          <td className="px-6 py-4">
+                            {new Date(score.processed_at).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={(event) => handleEditClick(event, score)}
+                              className="font-medium text-cyan-500 hover:underline"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </form>
         </div>
       </div>
     </div>
